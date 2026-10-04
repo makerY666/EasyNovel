@@ -107,3 +107,18 @@ alembic/versions/*.py
 
 # Pyright
 pyrightconfig.json
+!migrations/versions/*.py
+.data/
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/binaries/
+artifacts/
+*.sqlite3-wal
+*.sqlite3-shm
+
+
+.tools/
+*.tsbuildinfo
+
+
+.playwright-cli/
+output/playwright/

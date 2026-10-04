@@ -1,0 +1,5 @@
+{
+  "name": "easynovel-desktop", "private": true, "version": "0.2.0",
+  "scripts": {"dev": "tauri dev", "build": "tauri build", "check": "cargo check --manifest-path src-tauri/Cargo.toml"},
+  "devDependencies": {"@tauri-apps/cli": "^2.8.0"}
+}

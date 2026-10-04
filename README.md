@@ -1,292 +1,54 @@
-# AI Novel Studio
+# EasyNovel 小说创作工作站
 
-AI 驱动的小说生产工作流系统，基于 LangChain/LangGraph 构建。
+Windows x64 本地桌面应用，作者审核规划、正文与记忆后入库。使用自带的模型 API，支持中文连载与精品小说两种模式。
 
-## 项目概述
+## 当前启动方式
 
-AI Novel Studio 是一个半自动工业化写作系统，旨在提高小说创作生产力，同时保持人工审核和创意控制。
+本机的 Windows 应用程序控制策略阻止 Rust 构建脚本运行（错误 4551），桌面安装包尚未构建成功。可先运行浏览器开发工作台：
 
-### 核心特性
+本机已配置好依赖，双击桌面的 **EasyNovel** 快捷方式，或根目录 **启动.cmd**。会自动启动本地服务、打开浏览器并连接，不需要复制会话令牌。保留启动窗口，关闭窗口即可退出；重复启动复用同一实例。
 
-- **多 Agent 协作**：10+ 个专业 Agent 协同工作
-- **质量保证**：多层次质量评估和人工审核
-- **版本控制**：完整的版本历史和对比功能
-- **记忆系统**：6 类记忆确保长期一致性
-- **可扩展架构**：支持多种模型和平台
+端口占用时自动选择可用端口；重复启动也能找到使用其他端口的实例。数据目录有后台进程锁，避免连续点击或手工启动产生两个后台同时使用同一作品库。
 
-### 技术栈
+命令行可用 `./scripts/start-browser.ps1 -OpenBrowser`。服务只监听回环地址。当前浏览器运行需要 `.venv`、Node.js 和前端依赖；新电脑首次配置运行 `./scripts/setup.ps1`。可用 `./scripts/create-shortcut.ps1` 创建桌面快捷方式。详细操作见 [上手说明](docs/USAGE.md)。
 
-- **后端**：FastAPI + SQLAlchemy
-- **工作流**：LangGraph
-- **数据库**：SQLite（开发）/ PostgreSQL（生产）
-- **模型**：DeepSeek 默认，支持 OpenAI-compatible API 配置
-- **前端**：React + TypeScript 本地工作台
+完整桌面构建在允许运行构建程序的 Windows 环境中执行 `./scripts/build.ps1`，安装包输出到 `apps/desktop/src-tauri/target/release/bundle/nsis/`。项目提供 Windows CI 工作流，但本次尚未执行远程 CI。构建成功后的桌面用户无需安装 Python、Node.js 或 Rust。
 
-## 项目结构
+## 创作流程
 
-```
-ai-novel-studio/
-├── apps/
-│   ├── api/          # FastAPI 后端
-│   └── web/          # React 前端
-├── packages/
-│   ├── database/     # 数据库模型
-│   ├── workflow/     # LangGraph 工作流
-│   ├── agents/       # Agent 实现
-│   ├── memory/       # 记忆系统
-│   ├── models/       # 模型网关
-│   ├── prompts/      # Prompt 模板
-│   └── evals/        # 质量评估
-├── projects/         # 小说项目数据
-├── tests/            # 测试代码
-└── docs/             # 文档
-```
+1. 新建作品，或导入 TXT / Markdown 并检查分章边界。
+2. 在“设置”添加 OpenAI-compatible 服务、密钥和实际模型 ID；可按智能体指定模型与提示词。密钥存系统凭据库。价格未知时使用 token 上限，费用以供应商账单为准。
+3. 确认人物、世界规则、时间线、认知、计划和伏笔。计划与正文事实分别检索。
+4. 创建或选择章节，在作者导演中输入本章要求、选择模型并设置预算。默认「直接写正文」自动完成规划、写作和审稿，中央显示正文候选；满意后选择性确认正文与记忆入库。「先审核计划」保留逐步导演流程。「整理创作指令」只产生候选约束卡，不生成正文。
+5. 不满意时展开「让 AI 按要求修改」，输入具体改稿要求并生成修改稿；原稿和历史保留，修改稿再次审核入库。也可以返回编辑器手工改稿。修改已确认正文或设定时查看影响清单，受影响章节可以改稿修复，正式续写仍须等待修复或核查。
 
-## 快速开始
+工作流支持暂停、取消、恢复，自动修订最多两轮。网络调用结果不确定时保留预算和账本，避免静默重复付费。硬约束超过模型容量会暂停。场景按视角和故事时间分别构建上下文。
 
-### 1. 环境准备
+新任务默认 200000 Token，保留用户自选额度。任务 Token 上限是所有调用的累计额度；模型与角色的「单次输出上限」决定每次回答最多多长。总额度设为 1000000 不会提高单次输出上限。因单次输出截断暂停时，在恢复窗口提高对应角色和模型的输出上限（例如 8192），不能只增加总预算。原输出和已用消耗会保留，截断内容不会当作完整成果入库。更新后端代码后，先关闭旧启动窗口，再双击启动；新会话自动连接，已有作品和任务仍在本地库中。
 
-```bash
-# 克隆项目
-git clone <repository-url>
-cd ai-novel-studio
+## 数据与恢复
 
-# 创建虚拟环境
-python -m venv .venv
-.venv\Scripts\activate  # Windows
-# source .venv/bin/activate  # Linux/Mac
+默认目录 `%LOCALAPPDATA%\EasyNovel`；权威库 `studio.sqlite3`，检索索引可重建。完整备份包含正文、版本、资料、运行与检查点，不含 API 密钥。自动备份保留七份，手动备份不清理。升级迁移前生成备份。
 
-# 安装依赖
-pip install poetry
-poetry install
-```
+原目录 `ai_novel_studio.db` 不被修改。迁移先备份旧库，在新库建立草稿与待核查记忆；旧摘要不会成为已确认事实。
 
-### 2. 配置环境变量
+## 开发与测试
 
-```bash
-# 复制环境变量模板
-copy .env.example .env
-
-# 编辑 .env 文件，配置以下变量：
-# MODEL_API_KEY=your_model_api_key
-# MODEL_BASE_URL=https://api.deepseek.com/v1
-# MODEL_FLASH=deepseek-v4-flash
-# MODEL_PRO=deepseek-v4-pro
-# DATABASE_URL=sqlite:///./ai_novel_studio.db
-```
-
-### 3. 初始化数据库
-
-```bash
-# 运行数据库迁移
-alembic upgrade head
-```
-
-### 4. 运行测试
-
-```bash
-# 运行所有测试
-python -m pytest tests/ -v
-
-# 运行单元测试
-python -m pytest tests/unit/ -v
-
-# 运行测试并生成覆盖率报告
-python -m pytest tests/ --cov=packages --cov-report=html
-```
-
-### 5. 启动服务
-
-```bash
-# 启动 FastAPI 后端
-cd apps/api
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-
-# 启动前端
-cd apps/web
-npm install
-npm start
-```
-
-也可以在 Windows 下直接运行：
+开发环境：Python 3.12、Node.js 24、Rust MSVC、Windows C++ Build Tools。
 
 ```powershell
-.\start.ps1
+./scripts/setup.ps1
+./.venv/Scripts/python.exe -m pytest
+npm.cmd --prefix apps/web test -- --run
+npm.cmd --prefix apps/web run build
+./.venv/Scripts/python.exe scripts/benchmark.py
+./scripts/build.ps1
 ```
 
-本地发布版支持章节版本化保存、世界观/人物/风格/时间线/伏笔设定库、模型配置检查、成本摘要，以及 TXT/Markdown 导出。
+`./scripts/build.ps1 -BackendOnly` 仅生成后端可执行文件；`./start.ps1 -Development` 启动 Tauri 开发桌面。`scripts/live_smoke.py` 读取环境变量 `DEEPSEEK_API_KEY` 调用 `deepseek-flash`，会产生供应商费用。测试数据隔离在 `artifacts/live-smoke/`，默认任务上限 100000 tokens。
 
-## 核心工作流
+目录：`easynovel/` 领域服务与工作流；`apps/web/` React/Tiptap 工作台；`apps/desktop/` Tauri 壳；`migrations/` 迁移；`tests/` 测试。接口见 [API_CONTRACT](docs/API_CONTRACT.md)，设计见 [DESIGN](.ulpi/design/DESIGN.md)。
 
-### 工作流 1：新建小说项目
+核心创作闭环已实现。专业版本的验收结果及未完成要求见 [ACCEPTANCE](docs/ACCEPTANCE.md)。模型审稿和合成规模数据不能替代长期连载与读者盲评。
 
-```
-IdeaAgent → MarketFitAgent → StoryBibleAgent → CharacterAgent 
-→ VolumeOutlineAgent → StyleGuideAgent → HumanReview
-```
-
-### 工作流 2：生成单章
-
-```
-选择 chapter_id → ContextPackBuilder → ChapterPlannerAgent 
-→ HumanReview（章节卡确认）→ DraftWriterAgent → PlotEditorAgent 
-→ HumanStylePolisherAgent → ContinuityAuditorAgent → QualityJudgeAgent 
-→ HumanReview（润色稿确认）→ MemoryUpdater → HumanReview（发布确认）
-```
-
-## Agent 列表
-
-| Agent | 职责 | 模型 |
-|-------|------|------|
-| StoryBible Agent | 建立维护世界观规则 | deepseek-v4-pro |
-| Character Agent | 创建维护人物状态卡 | deepseek-v4-pro |
-| Chapter Planner Agent | 输出结构化章节卡 | deepseek-v4-pro |
-| Draft Writer Agent | 按章节卡写初稿 | deepseek-v4-flash |
-| Plot Editor Agent | 检查故事质量 | deepseek-v4-pro |
-| HumanStylePolisher Agent | 清除 AI 味，增强人类风格 | deepseek-v4-pro |
-| Continuity Auditor Agent | 检查设定一致性 | deepseek-v4-flash |
-| Quality Judge Agent | 多维度质量评分 | deepseek-v4-pro |
-| Editor-in-Chief Agent | 方向判断 | deepseek-v4-pro |
-
-## 记忆系统
-
-| 记忆类型 | 用途 | 存储格式 |
-|----------|------|----------|
-| Canon Memory | 硬设定库 | YAML |
-| Timeline Memory | 时间线 | JSON |
-| Character State | 人物状态 | JSON |
-| Foreshadowing Ledger | 伏笔账本 | JSON |
-| Style Memory | 文风记忆 | JSON |
-| Chapter Vector | 章节语义检索 | Vector DB |
-
-## 质量评估体系
-
-### 评分维度
-
-- **plot_progression**：剧情推进
-- **conflict_strength**：冲突强度
-- **character_consistency**：人物一致性
-- **style_naturalness**：语言自然度
-- **dialogue_quality**：对话质量
-- **hook_strength**：章末钩子
-- **continuity_safety**：连续性安全
-- **cliche_density**：套话密度
-
-### 自动拦截规则
-
-- 连续性冲突未解决
-- 人物知道不该知道的信息
-- 新增重大设定但没入库
-- 章末没有钩子
-- 润色改变剧情事实
-- 大量模板化句子
-- 字数明显低于目标
-
-## 开发指南
-
-### 添加新 Agent
-
-1. 在 `packages/agents/` 目录下创建新 Agent 文件
-2. 实现 Agent 类，继承基础 Agent 类
-3. 在 `packages/workflow/nodes/` 中添加工作流节点
-4. 编写单元测试
-5. 更新文档
-
-### 添加新模型
-
-1. 在 `packages/models/` 目录下创建模型客户端
-2. 实现统一的模型接口
-3. 在模型路由中注册新模型
-4. 编写测试用例
-
-### 数据库迁移
-
-```bash
-# 创建新迁移
-alembic revision --autogenerate -m "描述"
-
-# 应用迁移
-alembic upgrade head
-
-# 回滚迁移
-alembic downgrade -1
-```
-
-## 测试
-
-### 测试结构
-
-```
-tests/
-├── unit/           # 单元测试
-├── integration/    # 集成测试
-└── e2e/            # 端到端测试
-```
-
-### 运行测试
-
-```bash
-# 运行所有测试
-python -m pytest tests/ -v
-
-# 运行特定测试文件
-python -m pytest tests/unit/test_database_models.py -v
-
-# 运行带标记的测试
-python -m pytest -m unit
-python -m pytest -m integration
-```
-
-### 测试覆盖率
-
-```bash
-# 生成覆盖率报告
-python -m pytest tests/ --cov=packages --cov-report=html
-
-# 查看覆盖率报告
-start htmlcov/index.html
-```
-
-## 部署
-
-### Docker 部署
-
-```bash
-# 构建镜像
-docker build -t ai-novel-studio .
-
-# 运行容器
-docker run -p 8000:8000 ai-novel-studio
-```
-
-### 生产环境配置
-
-1. 使用 PostgreSQL 替代 SQLite
-2. 配置 pgvector 进行向量检索
-3. 设置 Redis 缓存
-4. 配置 Nginx 反向代理
-5. 设置 SSL 证书
-
-## 贡献指南
-
-1. Fork 项目
-2. 创建功能分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 创建 Pull Request
-
-## 许可证
-
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
-
-## 联系方式
-
-- 项目链接：https://github.com/your-username/ai-novel-studio
-- 问题反馈：https://github.com/your-username/ai-novel-studio/issues
-
-## 致谢
-
-- LangChain/LangGraph 团队
-- DeepSeek API
-- FastAPI 社区
-- SQLAlchemy 社区
+2026-10-03 的完整写作、读稿修订、界面和启动回归见 [本次验收报告](docs/QA-2026-10-03.md)。三种题材各两章的真实模型样章包含作者意见和逐句细修，不代表无人审核的成稿质量。
